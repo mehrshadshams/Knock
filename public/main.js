@@ -1,5 +1,39 @@
 'use strict';
 
+// ── Version badge initialization ──────────────────────────────────────────────
+(function initVersionBadge() {
+  try {
+    // Read version from meta tag
+    const versionMeta = document.querySelector('meta[name="app-version"]');
+    const versionContent = versionMeta ? versionMeta.getAttribute('content') : '';
+    
+    // Extract version and hash from meta tag (format: "version:hash")
+    let version = '1.0.0';
+    let hash = 'dev';
+    
+    if (versionContent && versionContent !== 'APP_VERSION_HASH') {
+      const parts = versionContent.split(':');
+      if (parts.length === 2) {
+        version = parts[0].trim();
+        hash = parts[1].trim();
+      } else if (parts.length === 1) {
+        version = parts[0].trim();
+      }
+    } else {
+      // Fallback: try to read BUILD_HASH from window or use default
+      hash = (typeof window !== 'undefined' && window.__BUILD_HASH__) || 'dev';
+    }
+    
+    // Create and inject badge element
+    const badge = document.createElement('div');
+    badge.id = 'version-badge';
+    badge.textContent = `${version}:${hash}`;
+    document.body.insertBefore(badge, document.body.firstChild);
+  } catch (err) {
+    console.warn('Failed to initialize version badge:', err);
+  }
+})();
+
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 const homeScreen   = document.getElementById('home-screen');
 const callScreen   = document.getElementById('call-screen');

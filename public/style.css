@@ -1,6 +1,25 @@
 /* ── Reset & base ─────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Version badge */
+#version-badge {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-family: 'Courier New', 'Monaco', monospace;
+  background: rgba(50, 50, 50, 0.85);
+  color: rgba(232, 234, 240, 0.7);
+  border-radius: 0 0 0 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 :root {
   --bg:         #0f1117;
   --surface:    #1a1d26;

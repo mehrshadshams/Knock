@@ -16,6 +16,7 @@ ENV_NAME="${APP_NAME}-env"
 
 IMAGE_TAG="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "latest")"
 IMAGE_REPO="${APP_NAME}"
+BUILD_HASH="$IMAGE_TAG"  # Use git short SHA as the build hash
 
 echo "========================================================="
 echo "  WebRTC — Azure Container Apps deploy"
@@ -66,10 +67,12 @@ echo ""
 echo ">>> [5/7] Building image remotely with ACR Tasks..."
 echo "      Source: $PROJECT_ROOT"
 echo "      Target: ${ACR_NAME}.azurecr.io/${IMAGE_REPO}:${IMAGE_TAG} (and :latest)"
+echo "      Build Hash: $BUILD_HASH"
 az acr build \
   --registry "$ACR_NAME" \
   --image "${IMAGE_REPO}:${IMAGE_TAG}" \
   --image "${IMAGE_REPO}:latest" \
+  --build-arg "BUILD_HASH=${BUILD_HASH}" \
   "$PROJECT_ROOT"
 
 echo "      Image pushed successfully."

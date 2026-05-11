@@ -171,3 +171,24 @@ az containerapp revision activate --name webrtc-call --resource-group webrtc-rg 
 ---
 
 > **Cost note**: Azure Container Apps has a generous free tier (180,000 vCPU-seconds/month). `minReplicas: 1` keeps one replica running at all times — check [pricing](https://azure.microsoft.com/pricing/details/container-apps/) for your usage.
+
+---
+
+## Version Display
+
+When you open the application, a version badge appears at the **top-right** of the page showing the format `version:hash`, e.g., `1.0.0:abc123def456`.
+
+**What it shows:**
+- **version**: From `package.json`
+- **hash**: Git commit SHA (when deployed via CI/CD) or image digest shorthand
+
+**Why it's useful:**
+- Quickly verify which deployment is running (useful for debugging)
+- Correlate observed behavior with specific builds
+- Monitor deployments in real-time without checking logs
+
+**Local development:**
+- Displays `1.0.0:dev` if `BUILD_HASH` is not set
+- To use a specific hash: `docker run -e BUILD_HASH=<short-sha> ...`
+
+The badge is **fixed at the top** and doesn't interfere with the call interface or controls.
