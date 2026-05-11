@@ -1,0 +1,8 @@
+node_modules/
+openspec/
+.git/
+.github/
+infra/
+*.md
+*.log
+.env
