@@ -10,6 +10,20 @@ param acrName string = 'webrtccallacr'
 @description('Container image tag to deploy')
 param imageTag string = 'latest'
 
+@description('JSON array of ICE servers for WebRTC (optional). Example: [{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"user","credential":"pass"}]')
+param webRtcIceServersJson string = ''
+
+@secure()
+@description('Twilio Account SID for TURN token generation (optional)')
+param twilioAccountSid string = ''
+
+@secure()
+@description('Twilio Auth Token for TURN token generation (optional)')
+param twilioAuthToken string = ''
+
+@description('Twilio TURN token TTL in seconds')
+param twilioTurnTtl string = '3600'
+
 // ── Azure Container Registry ─────────────────────────────────────────────────
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
@@ -41,6 +55,16 @@ resource ca 'Microsoft.App/containerApps@2023-05-01' = {
   properties: {
     managedEnvironmentId: caEnv.id
     configuration: {
+      secrets: [
+        {
+          name: 'twilio-account-sid'
+          value: twilioAccountSid
+        }
+        {
+          name: 'twilio-auth-token'
+          value: twilioAuthToken
+        }
+      ]
       ingress: {
         external: true
         targetPort: 3000
@@ -63,6 +87,22 @@ resource ca 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'PORT'
               value: '3000'
+            }
+            {
+              name: 'WEBRTC_ICE_SERVERS_JSON'
+              value: webRtcIceServersJson
+            }
+            {
+              name: 'TWILIO_ACCOUNT_SID'
+              secretRef: 'twilio-account-sid'
+            }
+            {
+              name: 'TWILIO_AUTH_TOKEN'
+              secretRef: 'twilio-auth-token'
+            }
+            {
+              name: 'TWILIO_TURN_TTL'
+              value: twilioTurnTtl
             }
           ]
           resources: {

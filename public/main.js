@@ -60,10 +60,33 @@ let isOfferer   = false;
 let isMuted     = false;
 let isCameraOff = false;
 
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+let configLoaded = false;
+
+async function ensureRtcConfigLoaded() {
+  if (configLoaded) return;
+
+  try {
+    const resp = await fetch('/webrtc-config', { cache: 'no-store' });
+    if (!resp.ok) {
+      configLoaded = true;
+      return;
+    }
+
+    const payload = await resp.json();
+    if (Array.isArray(payload.iceServers) && payload.iceServers.length > 0) {
+      iceServers = payload.iceServers;
+    }
+  } catch {
+    // Keep default STUN on failure.
+  }
+
+  configLoaded = true;
+}
 
 // ── WebSocket helpers ─────────────────────────────────────────────────────────
 function connectWS() {
+  // Browsers require secure WebSockets from HTTPS pages.
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${protocol}://${location.host}`);
 
@@ -121,7 +144,7 @@ async function getLocalMedia() {
 
 // ── RTCPeerConnection setup ───────────────────────────────────────────────────
 function createPeerConnection() {
-  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  pc = new RTCPeerConnection({ iceServers });
 
   // Add local tracks
   localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
@@ -234,6 +257,8 @@ startBtn.addEventListener('click', async () => {
   clearHomeError();
   startBtn.disabled = true;
 
+  await ensureRtcConfigLoaded();
+
   const ok = await getLocalMedia();
   if (!ok) {
     showHomeError('Camera and microphone access are required to make a call.');
@@ -276,6 +301,8 @@ joinBtn.addEventListener('click', async () => {
 
   joinBtn.disabled = true;
   startBtn.disabled = true;
+
+  await ensureRtcConfigLoaded();
 
   const ok = await getLocalMedia();
   if (!ok) {

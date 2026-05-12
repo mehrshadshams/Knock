@@ -7,6 +7,72 @@ const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const TWILIO_TURN_TTL = process.env.TWILIO_TURN_TTL || '3600';
+
+function getIceServers() {
+  const raw = process.env.WEBRTC_ICE_SERVERS_JSON;
+  if (!raw) return DEFAULT_ICE_SERVERS;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      console.warn('[config] WEBRTC_ICE_SERVERS_JSON is not a non-empty array, using default STUN.');
+      return DEFAULT_ICE_SERVERS;
+    }
+
+    const valid = parsed.every((item) => item && (typeof item.urls === 'string' || Array.isArray(item.urls)));
+    if (!valid) {
+      console.warn('[config] WEBRTC_ICE_SERVERS_JSON has invalid entries, using default STUN.');
+      return DEFAULT_ICE_SERVERS;
+    }
+
+    return parsed;
+  } catch (err) {
+    console.warn(`[config] Failed to parse WEBRTC_ICE_SERVERS_JSON: ${err.message}. Using default STUN.`);
+    return DEFAULT_ICE_SERVERS;
+  }
+}
+
+const ICE_SERVERS = getIceServers();
+
+function normalizeIceServers(servers) {
+  if (!Array.isArray(servers) || servers.length === 0) return DEFAULT_ICE_SERVERS;
+  return servers.map((s) => {
+    const out = { ...s };
+    if (!out.urls && out.url) {
+      out.urls = out.url;
+      delete out.url;
+    }
+    return out;
+  });
+}
+
+async function getTwilioIceServers() {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return null;
+
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+  const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Tokens.json`;
+  const body = new URLSearchParams({ Ttl: String(TWILIO_TURN_TTL) }).toString();
+
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+
+  if (!resp.ok) {
+    throw new Error(`Twilio token request failed with status ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  return normalizeIceServers(data.ice_servers);
+}
 
 // ── MIME types for static file serving ──────────────────────────────────────
 const MIME = {
@@ -50,6 +116,30 @@ function send(ws, obj) {
 
 // ── HTTP server (static files) ───────────────────────────────────────────────
 const server = http.createServer((req, res) => {
+  if (req.url === '/favicon.ico') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.url === '/webrtc-config') {
+    (async () => {
+      let servers = ICE_SERVERS;
+      try {
+        const twilioServers = await getTwilioIceServers();
+        if (twilioServers && twilioServers.length > 0) {
+          servers = twilioServers;
+        }
+      } catch (err) {
+        console.warn(`[config] Failed to fetch Twilio ICE servers: ${err.message}. Using fallback config.`);
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ iceServers: servers }));
+    })();
+    return;
+  }
+
   let urlPath = req.url === '/' ? '/index.html' : req.url;
   // Strip query strings
   urlPath = urlPath.split('?')[0];

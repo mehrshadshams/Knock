@@ -17,12 +17,26 @@ ENV_NAME="${APP_NAME}-env"
 IMAGE_TAG="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "latest")"
 IMAGE_REPO="${APP_NAME}"
 BUILD_HASH="$IMAGE_TAG"  # Use git short SHA as the build hash
+WEBRTC_ICE_SERVERS_JSON="${WEBRTC_ICE_SERVERS_JSON:-}"
+TWILIO_ACCOUNT_SID="${TWILIO_ACCOUNT_SID:-}"
+TWILIO_AUTH_TOKEN="${TWILIO_AUTH_TOKEN:-}"
+TWILIO_TURN_TTL="${TWILIO_TURN_TTL:-3600}"
 
 echo "========================================================="
 echo "  WebRTC — Azure Container Apps deploy"
 echo "  Resource group : $RG ($LOCATION)"
 echo "  ACR            : ${ACR_NAME}.azurecr.io"
 echo "  Image tag      : $IMAGE_TAG"
+if [[ -n "$WEBRTC_ICE_SERVERS_JSON" ]]; then
+  echo "  ICE config     : custom (WEBRTC_ICE_SERVERS_JSON set)"
+else
+  echo "  ICE config     : default STUN only"
+fi
+if [[ -n "$TWILIO_ACCOUNT_SID" && -n "$TWILIO_AUTH_TOKEN" ]]; then
+  echo "  TURN provider  : Twilio (runtime token mode)"
+else
+  echo "  TURN provider  : not configured"
+fi
 echo "========================================================="
 
 # ── Step 1: Azure login ────────────────────────────────────────────────────────
@@ -88,6 +102,10 @@ DEPLOY_OUTPUT="$(az deployment group create \
   --template-file "${PROJECT_ROOT}/infra/main.bicep" \
   --parameters "${PROJECT_ROOT}/infra/main.bicepparam" \
   --parameters imageTag="$IMAGE_TAG" \
+  --parameters webRtcIceServersJson="$WEBRTC_ICE_SERVERS_JSON" \
+  --parameters twilioAccountSid="$TWILIO_ACCOUNT_SID" \
+  --parameters twilioAuthToken="$TWILIO_AUTH_TOKEN" \
+  --parameters twilioTurnTtl="$TWILIO_TURN_TTL" \
   --output json)"
 
 FQDN="$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['properties']['outputs']['fqdn']['value'])")"

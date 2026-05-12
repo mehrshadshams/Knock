@@ -7,3 +7,7 @@ param location = 'eastus'
 param appName = 'webrtc-call'
 param acrName = 'webrtccallacr'   // ← change to a unique name before first deploy
 param imageTag = 'latest'
+param webRtcIceServersJson = ''
+param twilioAccountSid = ''
+param twilioAuthToken = ''
+param twilioTurnTtl = '3600'
