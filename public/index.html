@@ -50,6 +50,17 @@
       <button id="mute-btn"   class="ctrl-btn" title="Mute / Unmute">🎙️</button>
       <button id="hangup-btn" class="ctrl-btn ctrl-btn--red" title="End Call">📵</button>
       <button id="camera-btn" class="ctrl-btn" title="Camera On / Off">📷</button>
+
+      <div class="quality-group">
+        <label for="quality-select" class="quality-label">Quality</label>
+        <select id="quality-select" class="quality-select" title="Video quality">
+          <option value="auto" selected>Auto</option>
+          <option value="high">High (720p)</option>
+          <option value="medium">Medium (480p)</option>
+          <option value="low">Low (240p)</option>
+        </select>
+        <span id="quality-indicator" class="quality-indicator quality-indicator--unknown" title="Connection quality">● —</span>
+      </div>
     </div>
 
     <p id="call-status" class="call-status"></p>

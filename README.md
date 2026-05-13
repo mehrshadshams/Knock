@@ -48,6 +48,17 @@ Deploy to **Azure Container Apps** for a public HTTPS URL with zero infrastructu
 
 ---
 
+### Twillio
+
+This application uses Twillio's Programmable Video service for signaling and TURN relay. The server fetches temporary access tokens from Twillio's API on demand. To set up your own Twillio account:
+
+export the following environment variables locally (or add them to a `.env` file):
+
+```bash
+export TWILIO_ACCOUNT_SID=<your-account-sid>
+export TWILIO_AUTH_TOKEN=<your-auth-token>
+```
+
 ### Step 1 — One-time Azure provisioning
 
 ```bash

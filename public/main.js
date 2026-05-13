@@ -51,6 +51,26 @@ const muteBtn      = document.getElementById('mute-btn');
 const cameraBtn    = document.getElementById('camera-btn');
 const hangupBtn    = document.getElementById('hangup-btn');
 const callStatus   = document.getElementById('call-status');
+const qualitySelect    = document.getElementById('quality-select');
+const qualityIndicator = document.getElementById('quality-indicator');
+
+// ── Adaptive video quality ───────────────────────────────────────────────────
+const QUALITY_TIERS = {
+  high:   { maxBitrate: 1_500_000, maxFramerate: 30, scaleResolutionDownBy: 1   },
+  medium: { maxBitrate:   600_000, maxFramerate: 24, scaleResolutionDownBy: 1.5 },
+  low:    { maxBitrate:   200_000, maxFramerate: 15, scaleResolutionDownBy: 3   },
+};
+const CLASSIFICATION_TO_TIER = { good: 'high', fair: 'medium', poor: 'low' };
+
+let activeTier         = null;     // currently applied tier name
+let qualityMode        = 'auto';   // 'auto' | 'high' | 'medium' | 'low'
+let statsTimer         = null;
+let lastSample         = null;     // last raw stats snapshot for tooltip
+let lastClassification = null;
+let pendingUpgradeTier = null;
+let pendingUpgradeCount = 0;
+let prevPacketsLost    = 0;
+let prevPacketsSent    = 0;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let ws          = null;
@@ -134,11 +154,196 @@ function goToHome() {
 // ── Media access ──────────────────────────────────────────────────────────────
 async function getLocalMedia() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true,
+    });
     localVideo.srcObject = localStream;
     return true;
   } catch {
     return false;
+  }
+}
+
+// ── Quality tier application ────────────────────────────────────────────────
+async function applyTier(peer, tierName) {
+  if (!peer) return;
+  const tier = QUALITY_TIERS[tierName];
+  if (!tier) return;
+  if (activeTier === tierName) return;
+
+  const sender = peer.getSenders().find((s) => s.track && s.track.kind === 'video');
+  if (!sender) return;
+
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    params.encodings[0].maxBitrate            = tier.maxBitrate;
+    params.encodings[0].maxFramerate          = tier.maxFramerate;
+    params.encodings[0].scaleResolutionDownBy = tier.scaleResolutionDownBy;
+    await sender.setParameters(params);
+    activeTier = tierName;
+    console.log(`[quality] applied tier: ${tierName}`);
+  } catch (err) {
+    console.warn(`[quality] setParameters failed for tier ${tierName}:`, err);
+    // Reflect intent in UI even if engine rejects
+    activeTier = tierName;
+  }
+}
+
+// ── Stats sampling & classification ─────────────────────────────────────────
+async function sampleStats(peer) {
+  if (!peer) return null;
+
+  let rtt              = null;
+  let availableOutBps  = null;
+  let packetsLost      = null;
+  let packetsSent      = null;
+
+  try {
+    const stats = await peer.getStats();
+    stats.forEach((report) => {
+      if (report.type === 'remote-inbound-rtp' && report.kind === 'video') {
+        if (typeof report.roundTripTime === 'number') rtt = report.roundTripTime;
+        if (typeof report.packetsLost === 'number')   packetsLost = report.packetsLost;
+      }
+      if (report.type === 'outbound-rtp' && report.kind === 'video' && !report.isRemote) {
+        if (typeof report.packetsSent === 'number') packetsSent = report.packetsSent;
+      }
+      if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+        if (typeof report.availableOutgoingBitrate === 'number') {
+          availableOutBps = report.availableOutgoingBitrate;
+        }
+        if (rtt == null && typeof report.currentRoundTripTime === 'number') {
+          rtt = report.currentRoundTripTime;
+        }
+      }
+    });
+  } catch (err) {
+    console.warn('[quality] getStats failed:', err);
+    return null;
+  }
+
+  // Compute loss rate from delta
+  let lossRate = null;
+  if (packetsLost != null && packetsSent != null) {
+    const dLost = Math.max(0, packetsLost - prevPacketsLost);
+    const dSent = Math.max(0, packetsSent - prevPacketsSent);
+    if (dSent > 0) lossRate = dLost / (dLost + dSent);
+    prevPacketsLost = packetsLost;
+    prevPacketsSent = packetsSent;
+  }
+
+  return { rtt, lossRate, availableOutBps };
+}
+
+function classify(sample) {
+  if (!sample) return 'poor';
+  const { rtt, lossRate, availableOutBps } = sample;
+
+  // Treat unknown rtt/loss as worst-case (poor) only if both are missing;
+  // otherwise judge with what we have.
+  const rttGood  = rtt == null      ? true : rtt < 0.2;
+  const rttFair  = rtt == null      ? true : rtt < 0.4;
+  const lossGood = lossRate == null ? true : lossRate < 0.02;
+  const lossFair = lossRate == null ? true : lossRate < 0.07;
+  const bwGood   = availableOutBps == null ? true : availableOutBps >= 800_000;
+  const bwFair   = availableOutBps == null ? true : availableOutBps >= 300_000;
+
+  if (rttGood && lossGood && bwGood) return 'good';
+  if (rttFair && lossFair && bwFair) return 'fair';
+  return 'poor';
+}
+
+function tierRank(name) {
+  return name === 'high' ? 3 : name === 'medium' ? 2 : 1;
+}
+
+function updateIndicator(classification, sample) {
+  if (!qualityIndicator) return;
+  qualityIndicator.classList.remove(
+    'quality-indicator--good',
+    'quality-indicator--fair',
+    'quality-indicator--poor',
+    'quality-indicator--unknown'
+  );
+  const labelMap = { good: 'Good', fair: 'Fair', poor: 'Poor' };
+  qualityIndicator.classList.add(`quality-indicator--${classification}`);
+  qualityIndicator.textContent = `● ${labelMap[classification]}`;
+
+  const rttMs = sample && sample.rtt != null ? Math.round(sample.rtt * 1000) + ' ms' : 'unknown';
+  const lossPct = sample && sample.lossRate != null ? (sample.lossRate * 100).toFixed(1) + ' %' : 'unknown';
+  const bwKbps = sample && sample.availableOutBps != null ? Math.round(sample.availableOutBps / 1000) + ' kbps' : 'unknown';
+  qualityIndicator.title = `RTT: ${rttMs} | Loss: ${lossPct} | Out: ${bwKbps}`;
+}
+
+async function pollQuality() {
+  if (!pc) return;
+  const sample = await sampleStats(pc);
+  lastSample = sample;
+  const cls = classify(sample);
+  lastClassification = cls;
+  updateIndicator(cls, sample);
+
+  if (qualityMode !== 'auto') return;
+
+  const targetTier = CLASSIFICATION_TO_TIER[cls];
+  const currentRank = activeTier ? tierRank(activeTier) : tierRank('high');
+  const targetRank  = tierRank(targetTier);
+
+  if (targetRank < currentRank) {
+    // Immediate downgrade
+    pendingUpgradeTier  = null;
+    pendingUpgradeCount = 0;
+    await applyTier(pc, targetTier);
+  } else if (targetRank > currentRank) {
+    // Hysteresis: require 2 consecutive samples
+    if (pendingUpgradeTier === targetTier) {
+      pendingUpgradeCount += 1;
+    } else {
+      pendingUpgradeTier  = targetTier;
+      pendingUpgradeCount = 1;
+    }
+    if (pendingUpgradeCount >= 2) {
+      await applyTier(pc, targetTier);
+      pendingUpgradeTier  = null;
+      pendingUpgradeCount = 0;
+    }
+  } else {
+    pendingUpgradeTier  = null;
+    pendingUpgradeCount = 0;
+  }
+}
+
+function startQualityLoop() {
+  if (statsTimer) return;
+  statsTimer = setInterval(pollQuality, 3000);
+}
+
+function stopQualityLoop() {
+  if (statsTimer) {
+    clearInterval(statsTimer);
+    statsTimer = null;
+  }
+  pendingUpgradeTier  = null;
+  pendingUpgradeCount = 0;
+}
+
+function resetQualityState() {
+  stopQualityLoop();
+  activeTier         = null;
+  qualityMode        = 'auto';
+  lastSample         = null;
+  lastClassification = null;
+  prevPacketsLost    = 0;
+  prevPacketsSent    = 0;
+  if (qualitySelect) qualitySelect.value = 'auto';
+  if (qualityIndicator) {
+    qualityIndicator.className = 'quality-indicator quality-indicator--unknown';
+    qualityIndicator.textContent = '● —';
+    qualityIndicator.title = 'Connection quality';
   }
 }
 
@@ -164,6 +369,19 @@ function createPeerConnection() {
     if (s === 'connected')     showCallStatus('');
     if (s === 'disconnected')  showCallStatus('Reconnecting…');
     if (s === 'failed')        showCallStatus('Connection failed.');
+  });
+
+  pc.addEventListener('iceconnectionstatechange', () => {
+    if (!pc) return;
+    const s = pc.iceConnectionState;
+    if (s === 'connected' || s === 'completed') {
+      // Apply default High tier baseline so encodings are always controlled.
+      applyTier(pc, 'high');
+      startQualityLoop();
+    }
+    if (s === 'failed' || s === 'closed' || s === 'disconnected') {
+      stopQualityLoop();
+    }
   });
 }
 
@@ -241,6 +459,7 @@ async function handleSignal(msg) {
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 function cleanup() {
+  stopQualityLoop();
   if (pc) { pc.close(); pc = null; }
   if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
   localVideo.srcObject  = null;
@@ -250,6 +469,7 @@ function cleanup() {
   isCameraOff = false;
   muteBtn.textContent   = '🎙️';
   cameraBtn.textContent = '📷';
+  resetQualityState();
 }
 
 // ── "Start a Call" button ─────────────────────────────────────────────────────
@@ -352,4 +572,29 @@ cameraBtn.addEventListener('click', () => {
 hangupBtn.addEventListener('click', () => {
   cleanup();
   goToHome();
+});
+
+// Quality selector handler
+if (qualitySelect) {
+  qualitySelect.addEventListener('change', () => {
+    const value = qualitySelect.value;
+    if (value === 'auto') {
+      qualityMode = 'auto';
+      pendingUpgradeTier  = null;
+      pendingUpgradeCount = 0;
+      // Re-evaluate on next poll; loop is already running if call is active.
+      if (pc && !statsTimer) startQualityLoop();
+    } else if (QUALITY_TIERS[value]) {
+      qualityMode = value;
+      // Manual: stop auto-changes but keep polling-driven indicator running.
+      pendingUpgradeTier  = null;
+      pendingUpgradeCount = 0;
+      if (pc) applyTier(pc, value);
+    }
+  });
+}
+
+// Reset quality UI when leaving the call screen via browser navigation
+window.addEventListener('beforeunload', () => {
+  stopQualityLoop();
 });
