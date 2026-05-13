@@ -6,11 +6,11 @@
     // Read version from meta tag
     const versionMeta = document.querySelector('meta[name="app-version"]');
     const versionContent = versionMeta ? versionMeta.getAttribute('content') : '';
-    
+
     // Extract version and hash from meta tag (format: "version:hash")
     let version = '1.0.0';
     let hash = 'dev';
-    
+
     if (versionContent && versionContent !== 'APP_VERSION_HASH') {
       const parts = versionContent.split(':');
       if (parts.length === 2) {
@@ -23,7 +23,7 @@
       // Fallback: try to read BUILD_HASH from window or use default
       hash = (typeof window !== 'undefined' && window.__BUILD_HASH__) || 'dev';
     }
-    
+
     // Create and inject badge element
     const badge = document.createElement('div');
     badge.id = 'version-badge';

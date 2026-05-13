@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,6 +8,7 @@
   <title>WebRTC Call</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
   <!-- ── Home screen ────────────────────────────────────────── -->
@@ -31,7 +33,8 @@
       <div class="divider"><span>or</span></div>
 
       <div class="join-row">
-        <input id="code-input" type="text" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off" spellcheck="false" />
+        <input id="code-input" type="text" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off"
+          spellcheck="false" />
         <button id="join-btn" class="btn btn-secondary">Join</button>
       </div>
 
@@ -43,11 +46,11 @@
   <div id="call-screen" class="screen hidden">
     <div class="video-container">
       <video id="remote-video" class="video-remote" autoplay playsinline></video>
-      <video id="local-video"  class="video-local"  autoplay playsinline muted></video>
+      <video id="local-video" class="video-local" autoplay playsinline muted></video>
     </div>
 
     <div class="controls">
-      <button id="mute-btn"   class="ctrl-btn" title="Mute / Unmute">🎙️</button>
+      <button id="mute-btn" class="ctrl-btn" title="Mute / Unmute">🎙️</button>
       <button id="hangup-btn" class="ctrl-btn ctrl-btn--red" title="End Call">📵</button>
       <button id="camera-btn" class="ctrl-btn" title="Camera On / Off">📷</button>
 
@@ -59,7 +62,8 @@
           <option value="medium">Medium (480p)</option>
           <option value="low">Low (240p)</option>
         </select>
-        <span id="quality-indicator" class="quality-indicator quality-indicator--unknown" title="Connection quality">● —</span>
+        <span id="quality-indicator" class="quality-indicator quality-indicator--unknown" title="Connection quality">●
+          —</span>
       </div>
     </div>
 
@@ -68,4 +72,5 @@
 
   <script src="main.js"></script>
 </body>
+
 </html>
