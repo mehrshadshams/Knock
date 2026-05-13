@@ -143,6 +143,8 @@ const server = http.createServer((req, res) => {
   let urlPath = req.url === '/' ? '/index.html' : req.url;
   // Strip query strings
   urlPath = urlPath.split('?')[0];
+  // Alias for the placeholder login page
+  if (urlPath === '/login') urlPath = '/login.html';
   const filePath = path.join(PUBLIC_DIR, urlPath);
 
   // Prevent directory traversal

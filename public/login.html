@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="app-version" content="APP_VERSION_HASH" />
+  <title>Sign in · Knock (Preview)</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .preview-banner {
+      background: rgba(255, 183, 77, 0.12);
+      border: 1px solid rgba(255, 183, 77, 0.35);
+      color: #ffb74d;
+      border-radius: 8px;
+      padding: .55rem .75rem;
+      font-size: .8rem;
+      text-align: center;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+
+    .form-field label {
+      font-size: .8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05rem;
+    }
+
+    .form-field input {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      padding: .65rem .9rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .form-field input:focus {
+      border-color: var(--primary);
+    }
+
+    .mfa-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .65rem;
+      background: rgba(255, 255, 255, .02);
+    }
+
+    .mfa-panel h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .mfa-panel p.helper {
+      color: var(--muted);
+      font-size: .8rem;
+      text-align: center;
+      margin: 0;
+    }
+
+    #mfa-qr {
+      background: #fff;
+      border-radius: 6px;
+      padding: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="login-screen" class="screen">
+    <div class="card">
+      <h1>📹 Sign in</h1>
+      <p class="preview-banner">
+        Preview only — real sign-in and MFA verification will be enabled in a future release.
+      </p>
+
+      <form id="login-form" autocomplete="off">
+        <div class="form-field">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" placeholder="demo only" spellcheck="false" />
+        </div>
+        <div class="form-field" style="margin-top: .75rem;">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="demo only" />
+        </div>
+
+        <button id="continue-btn" type="submit" class="btn btn-primary" style="margin-top: 1rem;">
+          Continue
+        </button>
+      </form>
+
+      <div class="divider"><span>MFA setup</span></div>
+
+      <section class="mfa-panel" aria-label="Authenticator app setup">
+        <h2>Set up authenticator app</h2>
+        <canvas id="mfa-qr" width="220" height="220" aria-label="MFA enrollment QR code"></canvas>
+        <p class="helper">
+          Scan this QR code with an authenticator app to preview enrollment.
+          The code is regenerated each visit and is not bound to a real account.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <script src="qr.js"></script>
+  <script src="login.js"></script>
+</body>
+
+</html>
